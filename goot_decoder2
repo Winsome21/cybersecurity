@@ -64,9 +64,11 @@ if Path(file).is_file():
 
         #Regex to pull function names, function contents, and order to add functions together
         reg1 = recompile(r"(?P<function_names>\w+) *\= *\'(?P<function_contents>[^\'\\]*(?:\\.[^\'\\]*)*)\'",multiline)
-        reg2 = recompile(r"\; *(?P<function_name>\w+\d{0,4}) *\= *(?P<add_function>\w+\d{0,4}[^;]+)",multiline)
+        reg2 = recompile(r"\;(?P<add_block>\w+\d{0,4}\=\w+\d{0,4} *\+.+$)",multiline)
+        reg3 = recompile(r"(?P<function_name>\w+\d{0,4}) *\= *(?P<add_function>\w+\d{0,4}[^;]+)",multiline)
         enc_functions = findall(reg1, longest_match)
-        add_functions = findall(reg2, longest_match)
+        add_block = findall(reg2, longest_match)
+        add_functions = findall(reg3, str(add_block))
 
         #Convert functions list to dictionary so contents can be called by name
         enc_dict = dict(enc_functions)
@@ -166,9 +168,11 @@ elif Path(file).is_dir():
 
             #Regex to pull function names, function contents, and order to add functions together
             reg1 = recompile(r"(?P<function_names>\w+) *\= *\'(?P<function_contents>[^\'\\]*(?:\\.[^\'\\]*)*)\'",multiline)
-            reg2 = recompile(r"\; *(?P<function_name>\w+\d{0,4}) *\= *(?P<add_function>\w+\d{0,4}[^;]+)",multiline)
+            reg2 = recompile(r"\;(?P<add_block>\w+\d{0,4}\=\w+\d{0,4} *\+.+$)",multiline)
+            reg3 = recompile(r"(?P<function_name>\w+\d{0,4}) *\= *(?P<add_function>\w+\d{0,4}[^;]+)",multiline)
             enc_functions = findall(reg1, longest_match)
-            add_functions = findall(reg2, longest_match)
+            add_block = findall(reg2, longest_match)
+            add_functions = findall(reg3, str(add_block))
 
             #Convert functions list to dictionary so contents can be called by name
             enc_dict = dict(enc_functions)
