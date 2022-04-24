@@ -1,0 +1,238 @@
+#!/usr/bin/env python3
+#Libraries
+from re import findall, sub, search, compile as recompile, MULTILINE as multiline
+from argparse import ArgumentParser
+from codecs import decode
+from pathlib import Path
+
+#Script properties
+parser = ArgumentParser()
+parser.add_argument("-f", type=str, required=True, help="file or directory")
+parser.add_argument("-vv", action='store_true', default=False, help="Verbose mode")
+args = parser.parse_args()
+file = args.f
+
+#Static jquery v3.6.0 functions (may need to be updated in the future)
+jqueryFunctions = ['toType', 'isArrayLike', 'Sizzle', 'createCache', 'markFunction', 'assert', 'addHandle', 'siblingCheck', 'createInputPseudo', 'createButtonPseudo', 'createDisabledPseudo', 'createPositionalPseu', 'testContext', 'setFilters', 'toSelector', 'addCombinator', 'elementMatcher', 'multipleContexts', 'condense', 'setMatcher', 'matcherFromTokens', 'matcherFromGroupMatc', 'nodeName', 'winnow', 'sibling', 'createOptions', 'Identity', 'Thrower', 'adoptValue', 'completed', 'fcamelCase', 'camelCase', 'Data', 'getData', 'dataAttr', 'adjustCSS', 'getDefaultDisplay', 'showHide', 'getAll', 'setGlobalEval', 'buildFragment', 'returnTrue', 'returnFalse', 'expectSync', 'safeActiveElement', 'on', 'leverageNative', 'manipulationTarget', 'disableScript', 'restoreScript', 'cloneCopyEvent', 'fixInput', 'domManip', 'remove', 'curCSS', 'addGetHookIf', 'vendorPropName', 'finalPropName', 'setPositiveNumber', 'boxModelAdjustment', 'getWidthOrHeight', 'Tween', 'schedule', 'createFxNow', 'genFx', 'createTween', 'defaultPrefilter', 'propFilter', 'Animation', 'getClass', 'classesToArray', 'buildParams', 'addToPrefiltersOrTra', 'inspectPrefiltersOrT', 'ajaxExtend', 'ajaxHandleResponses', 'ajaxConvert']
+
+def decrypt(encrypted):
+    plaintext = ""
+    i = 0
+    while(i < len(encrypted)):
+        decrypted = encrypted[i]
+        if i % 2:
+            plaintext = plaintext + decrypted
+        else:
+            plaintext = decrypted + plaintext
+        i += 1
+    return plaintext
+
+def sanitize(escaped):
+    unescaped = sub(r'\\"', '"', escaped)   #\\\\
+    unescaped = sub(r"\\'", "'", unescaped)  #\\'
+    return unescaped.replace(chr(92)*2, chr(92))
+
+#Checks if supplied item is a file
+if Path(file).is_file():
+    try:
+        f = open(file, 'r').read()
+        #Find and diff functions to get gootkit functions
+        #Pull all functions names
+        funRe = recompile(r'^function ([a-zA-Z\-\_]{1,20}[0-9]{0,4})',multiline)
+        gootFunctions = findall(funRe, f)
+
+        #Compare static jquery functions against functions in file
+        fnames = list(str(v) for v in gootFunctions if v not in jqueryFunctions)
+
+        #Regex functions content by searching for function names not in jqueryFunctions list
+        gootContent = {}
+        for func in fnames:
+            pattern1 = r'function %s\(.+?\)?\{\n(\t.+\n){1,10}\}\n' % func
+            pattern2 = r'function %s\(.+?\)?\{\n(\t\t?.+\n){1,15}\}\n' % func
+            if search(pattern1, f): gootContent[func] = search(pattern1, f).group()
+            elif search(pattern2, f): gootContent[func] = search(pattern2, f).group()
+            else: print("[!] %s not found" % func)
+
+        #Find the longest gootkit function
+        longest_match = []
+        for fname in fnames:
+            if not longest_match:
+                longest_match = gootContent[fname]
+            else:
+                if len(gootContent[fname]) > len(longest_match):
+                    longest_match = gootContent[fname]
+
+        #Regex to pull function names, function contents, and order to add functions together
+        reg1 = recompile(r"(?P<function_names>\w+) *\= *\'(?P<function_contents>[^\'\\]*(?:\\.[^\'\\]*)*)\'",multiline)
+        reg2 = recompile(r"\; *(?P<function_name>\w+\d{0,4}) *\= *(?P<add_function>\w+\d{0,4}[^;]+)",multiline)
+        enc_functions = findall(reg1, longest_match)
+        add_functions = findall(reg2, longest_match)
+
+        #Convert functions list to dictionary so contents can be called by name
+        enc_dict = dict(enc_functions)
+        add_dict = dict(add_functions)
+
+        final_dict = {}
+        for item in list(add_dict.keys())[:-1]:
+            definition = ""
+            new_list = list(add_dict[item].split('+'))
+            for item2 in new_list:
+                definition += str(enc_dict[item2])
+            final_dict[item] = definition
+
+        #Adding function contents together in order from malware payload instructions
+        constructor = ""
+        new_list2 = list(add_dict[list(add_dict)[-1]].split('+'))
+        for item in new_list2:
+            constructor += final_dict[item]
+
+        #Sanitize constructor
+        sanitized_constructor = sanitize(constructor)
+
+        #First decryption pass
+        first_decrypt = decrypt(sanitized_constructor)
+
+        #Regex to separate constructor to decrypt inner block and reassemble afterwards
+        #Regex everything before the encrypted block
+        reg3 = r"(?P<firstpart>.+\(\w+\(\').+\'\)\)"
+        #Regex the encrypted inner block
+        reg4 = r"\(\w+\(\'(?P<secendpart>.+)\'\)\)"
+        #Regex everything after the encrypted block
+        reg5 = r"\(\w+\(\'.+\(.+(?P<thirdpart>\'\)\).+)"
+
+        #Everything before the encrypted block
+        second_decrypt_p1 = findall(reg3, first_decrypt, multiline)
+        #The encrypted inner block
+        second_decrypt_p2 = findall(reg4, first_decrypt, multiline)
+        #Everything after the encrypted block
+        second_decrypt_p3 = findall(reg5, first_decrypt, multiline)
+
+        #Sanitize encrypted inner block
+        sanitized_2nd = sanitize(str(second_decrypt_p2))
+        #Remove quotes and brackets from converting list to string
+        sanitized_2nd1 = sanitized_2nd[2:-2]
+
+        #Second decryption pass
+        plaintext = decrypt(decode(sanitized_2nd1,'unicode-escape'))
+
+        #Regex out callback domains
+        reg6 = r"\= *\[(?P<domains>[^\]]+)\]\;"
+        domains = findall(reg6, plaintext, multiline)
+
+        final_plaintext = str(second_decrypt_p1)[2:-2] + plaintext + str(second_decrypt_p3)[2:-2]
+        
+        #Print filename, domains, and payload
+        if len(plaintext)>1:
+            print("\n" + str(file))
+            print("\ndomains = " + str(domains))
+            print("\n" + final_plaintext)
+        else:
+            print('\nFailed to process \"' + str(file) + '\"')
+    except:
+        print('Failed to process \"' + file + '\"')
+
+#Checks if supplied item is a directory
+elif Path(file).is_dir():
+    #Pulls list of file names from directory
+    files = sorted(list(Path(file).rglob("*")))
+    #Attempts to decrypt each file in directory
+    for items in files:
+        try:
+            f = open(items, 'r').read()
+            #Find and diff functions to get gootkit functions
+            #Pull all functions names
+            funRe = recompile(r'^function ([a-zA-Z\-\_]{1,20}[0-9]{0,4})',multiline)
+            gootFunctions = findall(funRe, f)
+
+            #Compare static jquery functions against functions in file
+            fnames = list(str(v) for v in gootFunctions if v not in jqueryFunctions)
+
+            #Regex functions content by searching for function names not in jqueryFunctions list
+            gootContent = {}
+            for func in fnames:
+                pattern1 = r'function %s\(.+?\)?\{\n(\t.+\n){1,10}\}\n' % func
+                pattern2 = r'function %s\(.+?\)?\{\n(\t\t?.+\n){1,15}\}\n' % func
+                if search(pattern1, f): gootContent[func] = search(pattern1, f).group()
+                elif search(pattern2, f): gootContent[func] = search(pattern2, f).group()
+
+            #Find the longest gootkit function
+            longest_match = []
+            for fname in fnames:
+                if not longest_match:
+                    longest_match = gootContent[fname]
+                else:
+                    if len(gootContent[fname]) > len(longest_match):
+                        longest_match = gootContent[fname]
+
+            #Regex to pull function names, function contents, and order to add functions together
+            reg1 = recompile(r"(?P<function_names>\w+) *\= *\'(?P<function_contents>[^\'\\]*(?:\\.[^\'\\]*)*)\'",multiline)
+            reg2 = recompile(r"\; *(?P<function_name>\w+\d{0,4}) *\= *(?P<add_function>\w+\d{0,4}[^;]+)",multiline)
+            enc_functions = findall(reg1, longest_match)
+            add_functions = findall(reg2, longest_match)
+
+            #Convert functions list to dictionary so contents can be called by name
+            enc_dict = dict(enc_functions)
+            add_dict = dict(add_functions)
+
+            final_dict = {}
+            for item in list(add_dict.keys())[:-1]:
+                definition = ""
+                new_list = list(add_dict[item].split('+'))
+                for item2 in new_list:
+                    definition += str(enc_dict[item2])
+                final_dict[item] = definition
+
+            #Adding function contents together in order from malware payload instructions
+            constructor = ""
+            new_list2 = list(add_dict[list(add_dict)[-1]].split('+'))
+            for item in new_list2:
+                constructor += final_dict[item]
+
+            #Sanitize constructor
+            sanitized_constructor = sanitize(constructor)
+
+            #First decryption pass
+            first_decrypt = decrypt(sanitized_constructor)
+
+            #Regex to separate constructor to decrypt inner block and reassemble afterwards
+            #Regex everything before the encrypted block
+            reg3 = r"(?P<firstpart>.+\(\w+\(\').+\'\)\)"
+            #Regex the encrypted inner block
+            reg4 = r"\(\w+\(\'(?P<secendpart>.+)\'\)\)"
+            #Regex everything after the encrypted block
+            reg5 = r"\(\w+\(\'.+\(.+(?P<thirdpart>\'\)\).+)"
+
+            #Everything before the encrypted block
+            second_decrypt_p1 = findall(reg3, first_decrypt, multiline)
+            #The encrypted inner block
+            second_decrypt_p2 = findall(reg4, first_decrypt, multiline)
+            #Everything after the encrypted block
+            second_decrypt_p3 = findall(reg5, first_decrypt, multiline)
+
+            #Sanitize encrypted inner block
+            sanitized_2nd = sanitize(str(second_decrypt_p2))
+            #Remove quotes and brackets from converting list to string
+            sanitized_2nd1 = sanitized_2nd[2:-2]
+
+            #Second decryption pass
+            plaintext = decrypt(decode(sanitized_2nd1,'unicode-escape'))
+
+            #Regex out callback domains
+            reg6 = r"\= *\[(?P<domains>[^\]]+)\]\;"
+            domains = findall(reg6, plaintext, multiline)
+
+            final_plaintext = str(second_decrypt_p1)[2:-2] + plaintext + str(second_decrypt_p3)[2:-2]
+            
+            #Print filename, domains, and payload
+            if len(plaintext)>1:
+                print("\n" + str(items))
+                print("\ndomains = " + str(domains))
+                print("\n" + final_plaintext)
+            else:
+                print('\nFailed to process \"' + str(items) + '\"')
+        except:
+            print('\nFailed to process \"' + str(items) + '\"')
+
+#If supplied item fails is_file and is_dir check, user will receive this error
+else:
+    print('Supplied item failed is directory and is file check.')
