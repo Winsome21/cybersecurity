@@ -96,18 +96,18 @@ if Path(file).is_file():
 
         #Regex to separate constructor to decrypt inner block and reassemble afterwards
         #Regex everything before the encrypted block
-        reg3 = r"(?P<firstpart>.+\(\w+\(\').+\'\)\)"
+        reg4 = r"(?P<firstpart>.+\(\w+\(\').+\'\)\)"
         #Regex the encrypted inner block
-        reg4 = r"\(\w+\(\'(?P<secendpart>.+)\'\)\)"
+        reg5 = r"\(\w+\(\'(?P<secendpart>.+)\'\)\)"
         #Regex everything after the encrypted block
-        reg5 = r"\(\w+\(\'.+\(.+(?P<thirdpart>\'\)\).+)"
+        reg6 = r"\(\w+\(\'.+\(.+(?P<thirdpart>\'\)\).+)"
 
         #Everything before the encrypted block
-        second_decrypt_p1 = findall(reg3, first_decrypt, multiline)
+        second_decrypt_p1 = findall(reg4, first_decrypt, multiline)
         #The encrypted inner block
-        second_decrypt_p2 = findall(reg4, first_decrypt, multiline)
+        second_decrypt_p2 = findall(reg5, first_decrypt, multiline)
         #Everything after the encrypted block
-        second_decrypt_p3 = findall(reg5, first_decrypt, multiline)
+        second_decrypt_p3 = findall(reg6, first_decrypt, multiline)
 
         #Sanitize encrypted inner block
         sanitized_2nd = sanitize(str(second_decrypt_p2))
@@ -200,18 +200,18 @@ elif Path(file).is_dir():
 
             #Regex to separate constructor to decrypt inner block and reassemble afterwards
             #Regex everything before the encrypted block
-            reg3 = r"(?P<firstpart>.+\(\w+\(\').+\'\)\)"
+            reg4 = r"(?P<firstpart>.+\(\w+\(\').+\'\)\)"
             #Regex the encrypted inner block
-            reg4 = r"\(\w+\(\'(?P<secendpart>.+)\'\)\)"
+            reg5 = r"\(\w+\(\'(?P<secendpart>.+)\'\)\)"
             #Regex everything after the encrypted block
-            reg5 = r"\(\w+\(\'.+\(.+(?P<thirdpart>\'\)\).+)"
+            reg6 = r"\(\w+\(\'.+\(.+(?P<thirdpart>\'\)\).+)"
 
             #Everything before the encrypted block
-            second_decrypt_p1 = findall(reg3, first_decrypt, multiline)
+            second_decrypt_p1 = findall(reg4, first_decrypt, multiline)
             #The encrypted inner block
-            second_decrypt_p2 = findall(reg4, first_decrypt, multiline)
+            second_decrypt_p2 = findall(reg5, first_decrypt, multiline)
             #Everything after the encrypted block
-            second_decrypt_p3 = findall(reg5, first_decrypt, multiline)
+            second_decrypt_p3 = findall(reg6, first_decrypt, multiline)
 
             #Sanitize encrypted inner block
             sanitized_2nd = sanitize(str(second_decrypt_p2))
